@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DriveLearn Benchmark Dashboard</title>
+  <script>
+    window.tailwind = {
+      config: {
+        theme: {
+          extend: {
+            colors: {
+              ink: "#06273c",
+              navy: "#005088",
+              teal: "#11caa0",
+              cream: "#f3f0df",
+              mist: "#b8d5e3"
+            },
+            fontFamily: {
+              display: ["Poppins", "sans-serif"],
+              body: ["Manrope", "sans-serif"]
+            },
+            boxShadow: {
+              soft: "0 18px 48px rgba(0, 34, 57, 0.18)"
+            },
+            keyframes: {
+              pulsebox: {
+                "0%, 100%": { transform: "scale(1)", opacity: "0.9" },
+                "50%": { transform: "scale(1.03)", opacity: "1" }
+              },
+              signal: {
+                "0%": { transform: "translateY(10px)", opacity: "0" },
+                "100%": { transform: "translateY(0)", opacity: "1" }
+              }
+            },
+            animation: {
+              pulsebox: "pulsebox 1.4s ease-in-out infinite",
+              signal: "signal 0.45s ease-out forwards"
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <style>
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(17, 202, 160, 0.18), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(0, 80, 136, 0.2), transparent 38%),
+        linear-gradient(135deg, #f7f4e8 0%, #e7f1f4 48%, #f3f0df 100%);
+    }
+    .glass {
+      backdrop-filter: blur(14px);
+      background: rgba(243, 240, 223, 0.78);
+    }
+    .viewport-grid::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+      background-size: 42px 42px;
+      opacity: 0.24;
+      pointer-events: none;
+    }
+    .weather-rain::after,
+    .weather-fog::after,
+    .weather-sunny::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      transition: all 300ms ease;
+    }
+    .weather-rain::after {
+      background: linear-gradient(180deg, rgba(70, 131, 180, 0.24), rgba(0, 40, 68, 0.34));
+    }
+    .weather-fog::after {
+      background: linear-gradient(180deg, rgba(235, 240, 245, 0.32), rgba(215, 224, 231, 0.42));
+      backdrop-filter: blur(2px);
+    }
+    .weather-sunny::after {
+      background: linear-gradient(180deg, rgba(255, 215, 0, 0.06), rgba(255, 246, 204, 0.16));
+    }
+    .log-scroll {
+      scrollbar-width: thin;
+      scrollbar-color: #11caa0 rgba(6, 39, 60, 0.4);
+    }
+    .log-scroll::-webkit-scrollbar {
+      width: 8px;
+    }
+    .log-scroll::-webkit-scrollbar-thumb {
+      background: #11caa0;
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body class="font-body text-ink min-h-screen">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <header class="glass shadow-soft rounded-[28px] border border-white/70 px-6 py-6">
+      <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-sm font-semibold uppercase tracking-[0.35em] text-navy/70">DriveLearn DBMS</p>
+          <h1 class="mt-2 font-display text-3xl font-semibold text-ink sm:text-4xl">Autonomous Vehicle Edge-Case Benchmarking</h1>
+          <p class="mt-3 max-w-3xl text-sm text-ink/75 sm:text-base">
+            A normalized, analytics-ready system for comparing AV AI models against rain, fog, and daylight driving conditions without flat-file silos.
+          </p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div class="rounded-2xl bg-navy px-4 py-4 text-cream shadow-soft">
+            <div class="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-cream/70">
+              <i class="fa-solid fa-cloud"></i><span>Scenario Lab</span>
+            </div>
+            <p id="scenarioCount" class="mt-3 text-3xl font-bold">0</p>
+          </div>
+          <div class="rounded-2xl bg-ink px-4 py-4 text-cream shadow-soft">
+            <div class="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-cream/70">
+              <i class="fa-solid fa-microchip"></i><span>Models</span>
+            </div>
+            <p id="modelCount" class="mt-3 text-3xl font-bold">0</p>
+          </div>
+          <div class="rounded-2xl bg-teal px-4 py-4 text-ink shadow-soft">
+            <div class="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-ink/70">
+              <i class="fa-solid fa-shield-halved"></i><span>Normalization</span>
+            </div>
+            <p id="normalizationState" class="mt-3 text-2xl font-bold">Pending</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.8fr]">
+      <section class="space-y-6">
+        <div class="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <div class="glass shadow-soft rounded-[28px] border border-white/70 p-5">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.28em] text-navy/65">Scenario Selector</p>
+                <h2 class="mt-2 font-display text-2xl font-semibold">Benchmark Control</h2>
+              </div>
+              <div class="rounded-full bg-teal/15 px-3 py-1 text-xs font-semibold text-teal">10-Frame Run</div>
+            </div>
+
+            <div class="mt-5 space-y-4">
+              <label class="block">
+                <span class="mb-2 block text-sm font-semibold text-ink/70">Scenario Library</span>
+                <select id="scenarioSelect" class="w-full rounded-2xl border border-navy/15 bg-white/80 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"></select>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-semibold text-ink/70">Fleet Vehicle</span>
+                <select id="vehicleSelect" class="w-full rounded-2xl border border-navy/15 bg-white/80 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"></select>
+              </label>
+            </div>
+
+            <div class="mt-5 grid gap-3 sm:grid-cols-2">
+              <div class="rounded-2xl bg-white/80 p-4">
+                <p class="text-xs uppercase tracking-[0.25em] text-ink/55">Scenario Profile</p>
+                <p id="scenarioProfile" class="mt-2 text-lg font-semibold text-ink">-</p>
+                <p id="scenarioMeta" class="mt-2 text-sm text-ink/65">-</p>
+              </div>
+              <div class="rounded-2xl bg-white/80 p-4">
+                <p class="text-xs uppercase tracking-[0.25em] text-ink/55">Model Confidence</p>
+                <p id="avgConfidence" class="mt-2 text-lg font-semibold text-ink">-</p>
+                <p id="vehicleModelMeta" class="mt-2 text-sm text-ink/65">Awaiting selection</p>
+              </div>
+            </div>
+
+            <button id="runBenchmarkBtn" class="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-navy px-5 py-4 text-sm font-bold uppercase tracking-[0.2em] text-cream transition hover:bg-ink disabled:cursor-not-allowed disabled:opacity-60">
+              <i class="fa-solid fa-play"></i>
+              <span>Run Benchmark</span>
+            </button>
+          </div>
+
+          <div class="rounded-[30px] bg-ink px-5 py-5 text-cream shadow-soft">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.28em] text-mist/60">Live Benchmark Simulator</p>
+                <h2 class="mt-2 font-display text-2xl font-semibold">Simulation Viewport</h2>
+              </div>
+              <div id="liveStatus" class="rounded-full bg-cream/10 px-3 py-1 text-xs font-semibold tracking-[0.25em] text-cream/75">IDLE</div>
+            </div>
+
+            <div id="viewport" class="viewport-grid weather-sunny relative mt-5 h-[360px] overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,#1a4b68,#031524_72%)]">
+              <div class="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-slate-800/90 to-transparent"></div>
+              <div class="absolute bottom-10 left-8 right-8 h-1 rounded-full bg-white/10"></div>
+              <div class="absolute bottom-12 left-[16%] h-20 w-px bg-white/10"></div>
+              <div class="absolute bottom-12 left-[50%] h-20 w-px bg-white/10"></div>
+              <div class="absolute bottom-12 left-[84%] h-20 w-px bg-white/10"></div>
+
+              <div id="boundingBox" class="absolute hidden rounded-xl border-2 border-teal bg-teal/10 shadow-[0_0_0_1px_rgba(17,202,160,0.4)] animate-pulsebox">
+                <div class="absolute -top-8 left-0 rounded-lg bg-teal px-2 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-ink" id="boundingLabel">Pedestrian 0.000</div>
+              </div>
+
+              <div class="absolute left-5 top-5 rounded-2xl bg-black/35 px-4 py-3 backdrop-blur-sm">
+                <p class="text-xs uppercase tracking-[0.25em] text-cream/55">Frame Feed</p>
+                <p id="frameCounter" class="mt-2 text-3xl font-bold text-cream">00 / 10</p>
+                <p id="frameCaption" class="mt-2 text-sm text-cream/70">Select a scenario to start.</p>
+              </div>
+
+              <div class="absolute bottom-5 right-5 rounded-2xl bg-black/35 px-4 py-3 text-right backdrop-blur-sm">
+                <p class="text-xs uppercase tracking-[0.25em] text-cream/55">Detected Object</p>
+                <p id="objectReadout" class="mt-2 text-2xl font-semibold text-cream">Standby</p>
+                <p id="objectMeta" class="mt-2 text-sm text-cream/70">Waiting for benchmark input</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass shadow-soft rounded-[28px] border border-white/70 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.28em] text-navy/65">Fleet Registry</p>
+              <h2 class="mt-2 font-display text-2xl font-semibold">Vehicle Deployment Matrix</h2>
+            </div>
+            <div class="rounded-full bg-navy/10 px-3 py-1 text-xs font-semibold text-navy">Current AI Version Coverage</div>
+          </div>
+          <div id="fleetRegistry" class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+        </div>
+
+        <div class="glass shadow-soft rounded-[28px] border border-white/70 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.28em] text-navy/65">Performance Trend</p>
+              <h2 class="mt-2 font-display text-2xl font-semibold">Model Accuracy Area Chart</h2>
+            </div>
+            <div class="rounded-full bg-teal/10 px-3 py-1 text-xs font-semibold text-teal">Version-to-Version Benchmark Readiness</div>
+          </div>
+          <div class="mt-5 overflow-hidden rounded-[26px] bg-white/80 p-4">
+            <svg id="trendChart" viewBox="0 0 680 240" class="h-64 w-full"></svg>
+          </div>
+        </div>
+      </section>
+
+      <aside class="space-y-6">
+        <div class="rounded-[28px] bg-ink p-5 text-cream shadow-soft">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.28em] text-mist/60">Real-Time Logs</p>
+              <h2 class="mt-2 font-display text-2xl font-semibold">Benchmark Feed</h2>
+            </div>
+            <div class="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-cream/70">PASS / FAIL</div>
+          </div>
+          <div id="logFeed" class="log-scroll mt-5 h-[280px] space-y-3 overflow-y-auto rounded-[24px] border border-white/10 bg-white/5 p-4">
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-cream/70">Run a benchmark to populate frame-by-frame evaluation logs.</div>
+          </div>
+        </div>
+
+        <div class="glass shadow-soft rounded-[28px] border border-white/70 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.28em] text-navy/65">Analytics Sidebar</p>
+              <h2 class="mt-2 font-display text-2xl font-semibold">Run Health</h2>
+            </div>
+            <div class="rounded-full bg-teal/10 px-3 py-1 text-xs font-semibold text-teal">Success Rate</div>
+          </div>
+
+          <div class="mt-5 rounded-[24px] bg-white/80 p-4">
+            <div class="flex items-end justify-between">
+              <div>
+                <p class="text-xs uppercase tracking-[0.25em] text-ink/50">Current Success Rate</p>
+                <p id="successRateValue" class="mt-2 text-4xl font-bold text-ink">0%</p>
+              </div>
+              <p id="successRateMeta" class="text-sm text-ink/60">No run active</p>
+            </div>
+            <div class="mt-4 h-4 overflow-hidden rounded-full bg-navy/10">
+              <div id="successRateBar" class="h-full rounded-full bg-gradient-to-r from-teal to-navy transition-all duration-500" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-2xl bg-white/80 p-4">
+              <p class="text-xs uppercase tracking-[0.25em] text-ink/50">Average Confidence</p>
+              <p id="reportConfidence" class="mt-2 text-2xl font-bold text-ink">0.000</p>
+            </div>
+            <div class="rounded-2xl bg-white/80 p-4">
+              <p class="text-xs uppercase tracking-[0.25em] text-ink/50">Average Speed</p>
+              <p id="reportSpeed" class="mt-2 text-2xl font-bold text-ink">0 km/h</p>
+            </div>
+          </div>
+
+          <div class="mt-4 rounded-[24px] bg-white/80 p-4">
+            <p class="text-xs uppercase tracking-[0.25em] text-ink/50">Final Report</p>
+            <div id="finalReport" class="mt-3 space-y-2 text-sm text-ink/70">
+              <p>Awaiting benchmark execution.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass shadow-soft rounded-[28px] border border-white/70 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.28em] text-navy/65">Edge Case Isolation</p>
+              <h2 class="mt-2 font-display text-2xl font-semibold">Low-Confidence Frames</h2>
+            </div>
+            <div class="rounded-full bg-navy/10 px-3 py-1 text-xs font-semibold text-navy">Rain / Fog Under 0.70</div>
+          </div>
+          <div id="edgeCaseList" class="mt-5 space-y-3"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      scenarios: [],
+      vehicles: [],
+      models: [],
+      edgeCases: [],
+      running: false
+    };
+
+    const scenarioSelect = document.getElementById("scenarioSelect");
+    const vehicleSelect = document.getElementById("vehicleSelect");
+    const runBenchmarkBtn = document.getElementById("runBenchmarkBtn");
+    const viewport = document.getElementById("viewport");
+    const boundingBox = document.getElementById("boundingBox");
+    const boundingLabel = document.getElementById("boundingLabel");
+    const liveStatus = document.getElementById("liveStatus");
+    const frameCounter = document.getElementById("frameCounter");
+    const frameCaption = document.getElementById("frameCaption");
+    const objectReadout = document.getElementById("objectReadout");
+    const objectMeta = document.getElementById("objectMeta");
+    const logFeed = document.getElementById("logFeed");
+    const successRateValue = document.getElementById("successRateValue");
+    const successRateMeta = document.getElementById("successRateMeta");
+    const successRateBar = document.getElementById("successRateBar");
+    const finalReport = document.getElementById("finalReport");
+    const reportConfidence = document.getElementById("reportConfidence");
+    const reportSpeed = document.getElementById("reportSpeed");
+    const scenarioProfile = document.getElementById("scenarioProfile");
+    const scenarioMeta = document.getElementById("scenarioMeta");
+    const avgConfidence = document.getElementById("avgConfidence");
+    const vehicleModelMeta = document.getElementById("vehicleModelMeta");
+
+    function formatPercent(value) {
+      return `${Number(value).toFixed(1)}%`;
+    }
+
+    function currentScenario() {
+      return state.scenarios.find((scenario) => Number(scenario.scenario_id) === Number(scenarioSelect.value));
+    }
+
+    function currentVehicle() {
+      return state.vehicles.find((vehicle) => Number(vehicle.vehicle_id) === Number(vehicleSelect.value));
+    }
+
+    function setViewportWeather(weather) {
+      viewport.classList.remove("weather-rain", "weather-fog", "weather-sunny");
+      viewport.classList.add(`weather-${weather.toLowerCase()}`);
+    }
+
+    function renderScenarioDetails() {
+      const scenario = currentScenario();
+      if (!scenario) return;
+      scenarioProfile.textContent = scenario.label;
+      scenarioMeta.textContent = `${scenario.weather_type} | ${scenario.light_level} | ${scenario.road_type} | ${scenario.difficulty}`;
+      setViewportWeather(scenario.weather_type);
+      frameCaption.textContent = `Previewing ${scenario.label}. Overlay adapts to ${scenario.weather_type.toLowerCase()} conditions.`;
+    }
+
+    async function refreshAverageConfidence() {
+      const scenario = currentScenario();
+      const vehicle = currentVehicle();
+      if (!scenario || !vehicle) return;
+
+      vehicleModelMeta.textContent = `${vehicle.version_name} | ${vehicle.architecture}`;
+      const response = await fetch(`/api/analytics/avg-confidence?version_name=${encodeURIComponent(vehicle.version_name)}&scenario_id=${scenario.scenario_id}`);
+      const data = await response.json();
+      avgConfidence.textContent = data.average_confidence !== null ? data.average_confidence.toFixed(3) : "No samples";
+    }
+
+    function renderCounts(normalizationOk) {
+      document.getElementById("scenarioCount").textContent = state.scenarios.length;
+      document.getElementById("modelCount").textContent = state.models.length;
+      document.getElementById("normalizationState").textContent = normalizationOk ? "3NF Verified" : "Check Failed";
+    }
+
+    function renderSelectors() {
+      scenarioSelect.innerHTML = state.scenarios.map((scenario) => (
+        `<option value="${scenario.scenario_id}">${scenario.label}</option>`
+      )).join("");
+
+      vehicleSelect.innerHTML = state.vehicles.map((vehicle) => (
+        `<option value="${vehicle.vehicle_id}">${vehicle.make_model} | ${vehicle.version_name}</option>`
+      )).join("");
+    }
+
+    function renderFleetRegistry() {
+      const fleetRegistry = document.getElementById("fleetRegistry");
+      fleetRegistry.innerHTML = state.vehicles.map((vehicle) => `
+        <article class="rounded-[24px] bg-white/80 p-4 transition hover:-translate-y-1 hover:shadow-soft">
+          <div class="flex items-center justify-between">
+            <span class="rounded-full bg-navy/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-navy">${vehicle.status}</span>
+            <i class="fa-solid fa-microchip text-teal"></i>
+          </div>
+          <h3 class="mt-4 text-lg font-semibold text-ink">${vehicle.make_model}</h3>
+          <p class="mt-2 text-sm text-ink/65">${vehicle.version_name}</p>
+          <p class="mt-1 text-sm text-ink/55">${vehicle.architecture}</p>
+          <div class="mt-4 h-3 overflow-hidden rounded-full bg-navy/10">
+            <div class="h-full rounded-full bg-gradient-to-r from-navy to-teal" style="width: ${vehicle.accuracy_score * 100}%"></div>
+          </div>
+          <p class="mt-2 text-sm font-semibold text-ink/70">Accuracy Score ${(vehicle.accuracy_score * 100).toFixed(1)}%</p>
+        </article>
+      `).join("");
+    }
+
+    function renderEdgeCases() {
+      const edgeCaseList = document.getElementById("edgeCaseList");
+      edgeCaseList.innerHTML = state.edgeCases.map((frame) => `
+        <article class="rounded-[24px] bg-white/80 p-4">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-xs uppercase tracking-[0.22em] text-ink/45">Run ${frame.run_id} | Frame ${frame.frame_id}</p>
+              <h3 class="mt-2 text-base font-semibold text-ink">${frame.make_model}</h3>
+              <p class="mt-1 text-sm text-ink/65">${frame.version_name} in ${frame.weather_type} ${frame.light_level}</p>
+            </div>
+            <div class="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-600">${Number(frame.lowest_confidence).toFixed(3)}</div>
+          </div>
+          <p class="mt-3 text-sm text-ink/60">${frame.image_path}</p>
+        </article>
+      `).join("");
+    }
+
+    function renderTrendChart() {
+      const svg = document.getElementById("trendChart");
+      const padding = { top: 20, right: 30, bottom: 40, left: 46 };
+      const width = 680;
+      const height = 240;
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+      const points = state.models.map((model, index) => ({
+        x: padding.left + (chartWidth / Math.max(state.models.length - 1, 1)) * index,
+        y: padding.top + chartHeight - ((model.accuracy_score - 0.65) / 0.35) * chartHeight,
+        label: model.version_name,
+        value: model.accuracy_score
+      }));
+
+      const areaPath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+      const closedArea = `${areaPath} L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`;
+
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#11caa0" stop-opacity="0.55"></stop>
+            <stop offset="100%" stop-color="#005088" stop-opacity="0.08"></stop>
+          </linearGradient>
+        </defs>
+        <rect x="0" y="0" width="${width}" height="${height}" rx="24" fill="#f8fbfc"></rect>
+        <path d="${closedArea}" fill="url(#areaFill)"></path>
+        <path d="${areaPath}" fill="none" stroke="#005088" stroke-width="4" stroke-linecap="round"></path>
+        ${points.map((point) => `
+          <circle cx="${point.x}" cy="${point.y}" r="6" fill="#11caa0" stroke="#005088" stroke-width="3"></circle>
+          <text x="${point.x}" y="${height - 14}" text-anchor="middle" fill="#06273c" font-size="12" font-weight="700">${point.label}</text>
+          <text x="${point.x}" y="${point.y - 16}" text-anchor="middle" fill="#005088" font-size="12" font-weight="700">${(point.value * 100).toFixed(1)}%</text>
+        `).join("")}
+      `;
+    }
+
+    function resetLivePanels() {
+      logFeed.innerHTML = `<div class="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-cream/70">Preparing benchmark pipeline...</div>`;
+      successRateValue.textContent = "0%";
+      successRateMeta.textContent = "Frame stream starting";
+      successRateBar.style.width = "0%";
+      finalReport.innerHTML = "<p>Benchmark in progress...</p>";
+      reportConfidence.textContent = "0.000";
+      reportSpeed.textContent = "0 km/h";
+      frameCounter.textContent = "00 / 10";
+      objectReadout.textContent = "Calibrating";
+      objectMeta.textContent = "Waiting for first frame";
+      boundingBox.classList.add("hidden");
+      liveStatus.textContent = "RUNNING";
+    }
+
+    function appendLog(event) {
+      const item = document.createElement("article");
+      const pass = event.status === "PASS";
+      item.className = "animate-signal rounded-2xl border border-white/10 bg-white/5 p-4";
+      item.innerHTML = `
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs uppercase tracking-[0.22em] text-cream/55">Frame ${event.frame_number}</p>
+            <p class="mt-2 text-sm text-cream/80">${event.object_type} @ ${event.confidence_score.toFixed(3)} confidence</p>
+          </div>
+          <span class="${pass ? "bg-teal/20 text-teal" : "bg-red-400/20 text-red-300"} rounded-full px-3 py-1 text-xs font-bold tracking-[0.18em]">${event.status}</span>
+        </div>
+        <p class="mt-3 text-xs text-cream/55">roll ${event.probability_roll.toFixed(3)} | speed ${event.speed.toFixed(1)} km/h | ${event.timestamp}</p>
+      `;
+      logFeed.appendChild(item);
+      logFeed.scrollTop = logFeed.scrollHeight;
+    }
+
+    function updateBoundingBox(event) {
+      boundingBox.classList.remove("hidden");
+      boundingBox.style.left = `${event.bounding_box.left}%`;
+      boundingBox.style.top = `${event.bounding_box.top}%`;
+      boundingBox.style.width = `${event.bounding_box.width}%`;
+      boundingBox.style.height = `${event.bounding_box.height}%`;
+      boundingLabel.textContent = `${event.object_type} ${event.confidence_score.toFixed(3)}`;
+    }
+
+    async function playBenchmark(result) {
+      resetLivePanels();
+      let passes = 0;
+
+      for (const event of result.frames) {
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        passes += event.status === "PASS" ? 1 : 0;
+        const currentRate = (passes / event.frame_number) * 100;
+
+        frameCounter.textContent = `${String(event.frame_number).padStart(2, "0")} / 10`;
+        frameCaption.textContent = `${result.scenario.label} benchmark on ${result.vehicle.make_model}`;
+        objectReadout.textContent = event.object_type;
+        objectMeta.textContent = `${event.confidence_score.toFixed(3)} confidence | ${event.speed.toFixed(1)} km/h`;
+        successRateValue.textContent = formatPercent(currentRate);
+        successRateMeta.textContent = `${passes} passes across ${event.frame_number} processed frames`;
+        successRateBar.style.width = `${currentRate}%`;
+        reportConfidence.textContent = event.confidence_score.toFixed(3);
+        reportSpeed.textContent = `${event.speed.toFixed(1)} km/h`;
+
+        updateBoundingBox(event);
+        appendLog(event);
+      }
+
+      liveStatus.textContent = "COMPLETE";
+      successRateValue.textContent = formatPercent(result.report.success_rate);
+      successRateMeta.textContent = `${result.report.passes} pass | ${result.report.fails} fail`;
+      successRateBar.style.width = `${result.report.success_rate}%`;
+      reportConfidence.textContent = result.report.average_confidence.toFixed(3);
+      reportSpeed.textContent = `${result.report.avg_speed.toFixed(1)} km/h`;
+      finalReport.innerHTML = `
+        <p><span class="font-semibold text-ink">Run ID:</span> ${result.run_id}</p>
+        <p><span class="font-semibold text-ink">Scenario:</span> ${result.scenario.label}</p>
+        <p><span class="font-semibold text-ink">Vehicle:</span> ${result.vehicle.make_model}</p>
+        <p><span class="font-semibold text-ink">Model:</span> ${result.vehicle.version_name} (${result.report.model_accuracy.toFixed(1)}% baseline accuracy)</p>
+        <p><span class="font-semibold text-ink">Average Confidence:</span> ${result.report.average_confidence.toFixed(3)}</p>
+        <p><span class="font-semibold text-ink">Persisted Avg Speed:</span> ${result.report.avg_speed.toFixed(1)} km/h</p>
+      `;
+      await refreshAverageConfidence();
+      await refreshEdgeCases();
+    }
+
+    async function refreshEdgeCases() {
+      const response = await fetch("/api/edge-cases");
+      const data = await response.json();
+      state.edgeCases = data.frames.slice(0, 8);
+      renderEdgeCases();
+    }
+
+    async function loadBootstrap() {
+      const response = await fetch("/api/bootstrap");
+      const data = await response.json();
+      state.scenarios = data.scenarios;
+      state.vehicles = data.vehicles;
+      state.models = data.models;
+      state.edgeCases = data.edge_cases;
+
+      renderCounts(data.normalization_ok);
+      renderSelectors();
+      renderFleetRegistry();
+      renderEdgeCases();
+      renderTrendChart();
+      renderScenarioDetails();
+      await refreshAverageConfidence();
+    }
+
+    scenarioSelect.addEventListener("change", async () => {
+      renderScenarioDetails();
+      await refreshAverageConfidence();
+    });
+
+    vehicleSelect.addEventListener("change", refreshAverageConfidence);
+
+    runBenchmarkBtn.addEventListener("click", async () => {
+      if (state.running) return;
+      state.running = true;
+      runBenchmarkBtn.disabled = true;
+      runBenchmarkBtn.querySelector("span").textContent = "Benchmark Running";
+
+      try {
+        const response = await fetch("/api/run-benchmark", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scenario_id: Number(scenarioSelect.value),
+            vehicle_id: Number(vehicleSelect.value)
+          })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "Benchmark request failed");
+        }
+        await playBenchmark(result);
+      } catch (error) {
+        liveStatus.textContent = "ERROR";
+        finalReport.innerHTML = `<p class="text-red-600">${error.message}</p>`;
+      } finally {
+        state.running = false;
+        runBenchmarkBtn.disabled = false;
+        runBenchmarkBtn.querySelector("span").textContent = "Run Benchmark";
+      }
+    });
+
+    loadBootstrap();
+  </script>
+</body>
+</html>
+

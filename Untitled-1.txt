@@ -1,0 +1,1024 @@
+2.2 Description of Tables
+
+Note:
+The current project uses SQLite. SQLite does not enforce fixed column sizes such as `VARCHAR(50)`, so the "Size" column below describes the practical storage nature of each attribute.
+
+Table: `AI_Models`
+
+| Attribute | Data Type | Size | Constraints |
+|-----------|-----------|------|-------------|
+| `model_id` | INTEGER | Variable, up to 8 bytes | Primary Key, Auto Increment |
+| `version_name` | TEXT | Variable length | NOT NULL, UNIQUE |
+| `architecture` | TEXT | Variable length | NOT NULL |
+| `accuracy_score` | REAL | 8 bytes floating point | NOT NULL, CHECK (`accuracy_score BETWEEN 0.0 AND 1.0`) |
+
+Table: `Scenarios`
+
+| Attribute | Data Type | Size | Constraints |
+|-----------|-----------|------|-------------|
+| `scenario_id` | INTEGER | Variable, up to 8 bytes | Primary Key, Auto Increment |
+| `weather_type` | TEXT | Variable length | NOT NULL, CHECK (`weather_type IN ('Rain', 'Fog', 'Sunny')`) |
+| `light_level` | TEXT | Variable length | NOT NULL, CHECK (`light_level IN ('Day', 'Night')`) |
+| `road_type` | TEXT | Variable length | NOT NULL, CHECK (`road_type IN ('Highway', 'Urban')`) |
+| `difficulty` | TEXT | Variable length | NOT NULL, CHECK (`difficulty IN ('Low', 'Medium', 'High', 'Critical')`) |
+
+Table: `Vehicles`
+
+| Attribute | Data Type | Size | Constraints |
+|-----------|-----------|------|-------------|
+| `vehicle_id` | INTEGER | Variable, up to 8 bytes | Primary Key, Auto Increment |
+| `make_model` | TEXT | Variable length | NOT NULL |
+| `ai_model_id` | INTEGER | Variable, up to 8 bytes | NOT NULL, Foreign Key references `AI_Models(model_id)` ON DELETE RESTRICT |
+| `status` | TEXT | Variable length | NOT NULL |
+
+Table: `Test_Runs`
+
+| Attribute | Data Type | Size | Constraints |
+|-----------|-----------|------|-------------|
+| `run_id` | INTEGER | Variable, up to 8 bytes | Primary Key, Auto Increment |
+| `vehicle_id` | INTEGER | Variable, up to 8 bytes | NOT NULL, Foreign Key references `Vehicles(vehicle_id)` ON DELETE RESTRICT |
+| `scenario_id` | INTEGER | Variable, up to 8 bytes | NOT NULL, Foreign Key references `Scenarios(scenario_id)` ON DELETE RESTRICT |
+| `test_date` | TEXT | Variable length | NOT NULL |
+| `avg_speed` | REAL | 8 bytes floating point | NOT NULL, DEFAULT `0` |
+
+Table: `Frames`
+
+| Attribute | Data Type | Size | Constraints |
+|-----------|-----------|------|-------------|
+| `frame_id` | INTEGER | Variable, up to 8 bytes | Primary Key, Auto Increment |
+| `run_id` | INTEGER | Variable, up to 8 bytes | NOT NULL, Foreign Key references `Test_Runs(run_id)` ON DELETE CASCADE |
+| `timestamp` | TEXT | Variable length | NOT NULL |
+| `image_path` | TEXT | Variable length | NOT NULL |
+
+Table: `Detections`
+
+| Attribute | Data Type | Size | Constraints |
+|-----------|-----------|------|-------------|
+| `detection_id` | INTEGER | Variable, up to 8 bytes | Primary Key, Auto Increment |
+| `frame_id` | INTEGER | Variable, up to 8 bytes | NOT NULL, Foreign Key references `Frames(frame_id)` ON DELETE CASCADE |
+| `object_type` | TEXT | Variable length | NOT NULL |
+| `confidence_score` | NUMERIC | Variable numeric storage | NOT NULL, CHECK (`confidence_score BETWEEN 0.0 AND 0.999`) |
+
+Additional schema objects:
+- Index `idx_test_runs_scenario_id` on `Test_Runs(scenario_id)`
+- Index `idx_detections_confidence_score` on `Detections(confidence_score)`
+
+2.3 Creation of Database and Tables - DDL Commands
+
+Note:
+In the current project, the SQLite database file is `drivelearn.db`. The database and tables are created by the application using the following DDL commands.
+
+```sql
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS AI_Models (
+    model_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    version_name TEXT NOT NULL UNIQUE,
+    architecture TEXT NOT NULL,
+    accuracy_score REAL NOT NULL CHECK (accuracy_score BETWEEN 0.0 AND 1.0)
+);
+
+CREATE TABLE IF NOT EXISTS Scenarios (
+    scenario_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    weather_type TEXT NOT NULL CHECK (weather_type IN ('Rain', 'Fog', 'Sunny')),
+    light_level TEXT NOT NULL CHECK (light_level IN ('Day', 'Night')),
+    road_type TEXT NOT NULL CHECK (road_type IN ('Highway', 'Urban')),
+    difficulty TEXT NOT NULL CHECK (difficulty IN ('Low', 'Medium', 'High', 'Critical'))
+);
+
+CREATE TABLE IF NOT EXISTS Vehicles (
+    vehicle_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    make_model TEXT NOT NULL,
+    ai_model_id INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    FOREIGN KEY (ai_model_id) REFERENCES AI_Models(model_id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS Test_Runs (
+    run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER NOT NULL,
+    scenario_id INTEGER NOT NULL,
+    test_date TEXT NOT NULL,
+    avg_speed REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY (vehicle_id) REFERENCES Vehicles(vehicle_id) ON DELETE RESTRICT,
+    FOREIGN KEY (scenario_id) REFERENCES Scenarios(scenario_id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS Frames (
+    frame_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    timestamp TEXT NOT NULL,
+    image_path TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES Test_Runs(run_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Detections (
+    detection_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    frame_id INTEGER NOT NULL,
+    object_type TEXT NOT NULL,
+    confidence_score NUMERIC NOT NULL CHECK (confidence_score BETWEEN 0.0 AND 0.999),
+    FOREIGN KEY (frame_id) REFERENCES Frames(frame_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_test_runs_scenario_id
+ON Test_Runs(scenario_id);
+
+CREATE INDEX IF NOT EXISTS idx_detections_confidence_score
+ON Detections(confidence_score);
+```
+
+2.4 Insertion of tuples into the table - DML Commands
+
+Note:
+The current project contains master tables (`AI_Models`, `Scenarios`, `Vehicles`) and transactional tables (`Test_Runs`, `Frames`, `Detections`). The first three are inserted directly, while the larger tables are populated programmatically by the application. The SQL below uses real tuples from the current project database.
+
+Current table sizes on 2026-03-23:
+- `AI_Models`: 3 rows
+- `Scenarios`: 3 rows
+- `Vehicles`: 3 rows
+- `Test_Runs`: 20 rows
+- `Frames`: 200 rows
+- `Detections`: 310 rows
+
+Table: `AI_Models`
+
+Insert SQL:
+```sql
+INSERT INTO AI_Models (version_name, architecture, accuracy_score)
+VALUES
+('DriveNet v1.0', 'Hybrid CNN', 0.78),
+('DriveNet v1.4', 'Vision Transformer', 0.86),
+('Sentinel AV v2.1', 'Multimodal Fusion', 0.91);
+```
+
+Current table content:
+```text
+model_id | version_name     | architecture       | accuracy_score
+---------+------------------+--------------------+---------------
+1        | DriveNet v1.0    | Hybrid CNN         | 0.78
+2        | DriveNet v1.4    | Vision Transformer | 0.86
+3        | Sentinel AV v2.1 | Multimodal Fusion  | 0.91
+```
+
+Table: `Scenarios`
+
+Insert SQL:
+```sql
+INSERT INTO Scenarios (weather_type, light_level, road_type, difficulty)
+VALUES
+('Rain', 'Night', 'Highway', 'High'),
+('Sunny', 'Day', 'Highway', 'Low'),
+('Fog', 'Day', 'Urban', 'Critical');
+```
+
+Current table content:
+```text
+scenario_id | weather_type | light_level | road_type | difficulty
+------------+--------------+-------------+-----------+-----------
+1           | Rain         | Night       | Highway   | High
+2           | Sunny        | Day         | Highway   | Low
+3           | Fog          | Day         | Urban     | Critical
+```
+
+Table: `Vehicles`
+
+Insert SQL:
+```sql
+INSERT INTO Vehicles (make_model, ai_model_id, status)
+VALUES
+('Orion EV Fleet One', 1, 'Active'),
+('Orion EV Fleet Two', 2, 'Active'),
+('Atlas Urban Shuttle', 3, 'Standby');
+```
+
+Current table content:
+```text
+vehicle_id | make_model          | ai_model_id | status
+-----------+---------------------+-------------+--------
+1          | Orion EV Fleet One  | 1           | Active
+2          | Orion EV Fleet Two  | 2           | Active
+3          | Atlas Urban Shuttle | 3           | Standby
+```
+
+Table: `Test_Runs`
+
+Insert SQL:
+```sql
+INSERT INTO Test_Runs (vehicle_id, scenario_id, test_date, avg_speed)
+VALUES
+(1, 1, '2026-02-11T10:00:00', 63.79),
+(2, 1, '2026-02-11T11:00:00', 70.70),
+(3, 1, '2026-02-11T12:00:00', 61.19),
+(1, 2, '2026-02-12T10:00:00', 59.71),
+(2, 2, '2026-02-12T11:00:00', 69.77),
+(3, 2, '2026-02-12T12:00:00', 59.97),
+(1, 3, '2026-02-13T10:00:00', 18.00),
+(2, 3, '2026-02-13T11:00:00', 28.93);
+```
+
+Current sample rows from `Test_Runs`:
+```text
+run_id | vehicle_id | scenario_id | test_date           | avg_speed
+-------+------------+-------------+---------------------+----------
+1      | 1          | 1           | 2026-02-11T10:00:00 | 63.79
+2      | 2          | 1           | 2026-02-11T11:00:00 | 70.70
+3      | 3          | 1           | 2026-02-11T12:00:00 | 61.19
+4      | 1          | 2           | 2026-02-12T10:00:00 | 59.71
+5      | 2          | 2           | 2026-02-12T11:00:00 | 69.77
+6      | 3          | 2           | 2026-02-12T12:00:00 | 59.97
+7      | 1          | 3           | 2026-02-13T10:00:00 | 18.00
+8      | 2          | 3           | 2026-02-13T11:00:00 | 28.93
+```
+
+Table: `Frames`
+
+Insert SQL:
+```sql
+INSERT INTO Frames (run_id, timestamp, image_path)
+VALUES
+(1, '2026-02-10T10:00:00', 'seed/run_1/frame_01.jpg'),
+(1, '2026-02-10T10:00:02', 'seed/run_1/frame_02.jpg'),
+(1, '2026-02-10T10:00:04', 'seed/run_1/frame_03.jpg'),
+(1, '2026-02-10T10:00:06', 'seed/run_1/frame_04.jpg'),
+(1, '2026-02-10T10:00:08', 'seed/run_1/frame_05.jpg'),
+(1, '2026-02-10T10:00:10', 'seed/run_1/frame_06.jpg'),
+(1, '2026-02-10T10:00:12', 'seed/run_1/frame_07.jpg'),
+(1, '2026-02-10T10:00:14', 'seed/run_1/frame_08.jpg');
+```
+
+Current sample rows from `Frames`:
+```text
+frame_id | run_id | timestamp           | image_path
+---------+--------+---------------------+------------------------
+1        | 1      | 2026-02-10T10:00:00 | seed/run_1/frame_01.jpg
+2        | 1      | 2026-02-10T10:00:02 | seed/run_1/frame_02.jpg
+3        | 1      | 2026-02-10T10:00:04 | seed/run_1/frame_03.jpg
+4        | 1      | 2026-02-10T10:00:06 | seed/run_1/frame_04.jpg
+5        | 1      | 2026-02-10T10:00:08 | seed/run_1/frame_05.jpg
+6        | 1      | 2026-02-10T10:00:10 | seed/run_1/frame_06.jpg
+7        | 1      | 2026-02-10T10:00:12 | seed/run_1/frame_07.jpg
+8        | 1      | 2026-02-10T10:00:14 | seed/run_1/frame_08.jpg
+```
+
+Table: `Detections`
+
+Insert SQL:
+```sql
+INSERT INTO Detections (frame_id, object_type, confidence_score)
+VALUES
+(1, 'Car', 0.564),
+(1, 'Barrier', 0.420),
+(2, 'Pedestrian', 0.574),
+(3, 'Barrier', 0.420),
+(3, 'Barrier', 0.592),
+(4, 'Cyclist', 0.627),
+(5, 'Signal Cone', 0.469),
+(5, 'Car', 0.628),
+(6, 'Pedestrian', 0.713),
+(7, 'Cyclist', 0.621),
+(7, 'Signal Cone', 0.657),
+(8, 'Pedestrian', 0.420);
+```
+
+Current sample rows from `Detections`:
+```text
+detection_id | frame_id | object_type | confidence_score
+-------------+----------+-------------+-----------------
+1            | 1        | Car         | 0.564
+2            | 1        | Barrier     | 0.420
+3            | 2        | Pedestrian  | 0.574
+4            | 3        | Barrier     | 0.420
+5            | 3        | Barrier     | 0.592
+6            | 4        | Cyclist     | 0.627
+7            | 5        | Signal Cone | 0.469
+8            | 5        | Car         | 0.628
+9            | 6        | Pedestrian  | 0.713
+10           | 7        | Cyclist     | 0.621
+11           | 7        | Signal Cone | 0.657
+12           | 8        | Pedestrian  | 0.420
+```
+
+Note:
+`Test_Runs`, `Frames`, and `Detections` now contain more rows than the original seed because the current DriveLearn application also inserts additional live simulation records during execution.
+
+CHAPTER 3
+Complex queries based on the concepts of constraints, aggregate functions, sets, subqueries, joins, views, triggers and cursors
+
+Project basis:
+The following answers are based on the current DriveLearn project database (`drivelearn.db`) as it exists on 2026-03-23.
+Current database snapshot:
+- 20 rows in `Test_Runs`
+- 200 rows in `Frames`
+- 310 rows in `Detections`
+
+3.1 Adding Constraints and queries based on constraints
+
+Note:
+The current project already contains constraints in `AI_Models`, `Vehicles`, `Test_Runs`, `Frames`, and `Detections`. The following queries test those constraints directly.
+
+Question 1:
+Can a duplicate AI model version name be inserted into `AI_Models`?
+
+SQL Statement:
+```sql
+INSERT INTO AI_Models (version_name, architecture, accuracy_score)
+VALUES ('DriveNet v1.0', 'Test Architecture', 0.80);
+```
+
+Output:
+```text
+IntegrityError: UNIQUE constraint failed: AI_Models.version_name
+```
+
+Question 2:
+Can a detection be inserted with a confidence score outside the allowed range?
+
+SQL Statement:
+```sql
+INSERT INTO Detections (frame_id, object_type, confidence_score)
+VALUES (1, 'Barrier', 1.200);
+```
+
+Output:
+```text
+IntegrityError: CHECK constraint failed: confidence_score BETWEEN 0.0 AND 0.999
+```
+
+Question 3:
+Can a vehicle reference an AI model that does not exist?
+
+SQL Statement:
+```sql
+INSERT INTO Vehicles (make_model, ai_model_id, status)
+VALUES ('Ghost Vehicle', 999, 'Active');
+```
+
+Output:
+```text
+IntegrityError: FOREIGN KEY constraint failed
+```
+
+3.2 Queries based on Aggregate Functions
+
+Question 1:
+What is the average detection confidence for each AI model in the current project?
+
+SQL Statement:
+```sql
+SELECT
+    m.version_name,
+    ROUND(AVG(d.confidence_score), 3) AS avg_confidence,
+    COUNT(d.detection_id) AS detections
+FROM AI_Models m
+JOIN Vehicles v ON v.ai_model_id = m.model_id
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+JOIN Frames f ON f.run_id = tr.run_id
+JOIN Detections d ON d.frame_id = f.frame_id
+GROUP BY m.model_id, m.version_name
+ORDER BY avg_confidence DESC;
+```
+
+Output:
+```text
+version_name     | avg_confidence | detections
+-----------------+----------------+-----------
+Sentinel AV v2.1 | 0.791          | 90
+DriveNet v1.4    | 0.705          | 130
+DriveNet v1.0    | 0.669          | 90
+```
+
+Question 2:
+How many test runs are available for each scenario, and what is the average speed in that scenario?
+
+SQL Statement:
+```sql
+SELECT
+    s.scenario_id,
+    s.weather_type,
+    s.light_level,
+    s.road_type,
+    s.difficulty,
+    COUNT(tr.run_id) AS total_runs,
+    ROUND(AVG(tr.avg_speed), 2) AS avg_speed
+FROM Scenarios s
+LEFT JOIN Test_Runs tr ON tr.scenario_id = s.scenario_id
+GROUP BY
+    s.scenario_id,
+    s.weather_type,
+    s.light_level,
+    s.road_type,
+    s.difficulty
+ORDER BY s.scenario_id;
+```
+
+Output:
+```text
+scenario_id | weather_type | light_level | road_type | difficulty | total_runs | avg_speed
+------------+--------------+-------------+-----------+------------+------------+----------
+1           | Rain         | Night       | Highway   | High       | 7          | 62.55
+2           | Sunny        | Day         | Highway   | Low        | 6          | 65.16
+3           | Fog          | Day         | Urban     | Critical   | 7          | 19.99
+```
+
+Question 3:
+How many detections were recorded for each object type, along with the minimum and maximum confidence?
+
+SQL Statement:
+```sql
+SELECT
+    object_type,
+    COUNT(*) AS detection_count,
+    ROUND(MIN(confidence_score), 3) AS min_confidence,
+    ROUND(MAX(confidence_score), 3) AS max_confidence
+FROM Detections
+GROUP BY object_type
+ORDER BY detection_count DESC, object_type;
+```
+
+Output:
+```text
+object_type | detection_count | min_confidence | max_confidence
+------------+-----------------+----------------+---------------
+Pedestrian  | 59              | 0.364          | 0.985
+Signal Cone | 58              | 0.441          | 0.985
+Truck       | 50              | 0.420          | 0.985
+Car         | 49              | 0.449          | 0.985
+Barrier     | 47              | 0.380          | 0.985
+Cyclist     | 47              | 0.420          | 0.985
+```
+
+3.3 Complex queries based on Sets
+
+Question 1:
+Which vehicles participated in either Rain scenarios or Fog scenarios?
+
+SQL Statement:
+```sql
+SELECT v.make_model
+FROM Vehicles v
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+WHERE tr.scenario_id = 1
+
+UNION
+
+SELECT v.make_model
+FROM Vehicles v
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+WHERE tr.scenario_id = 3
+ORDER BY make_model;
+```
+
+Output:
+```text
+make_model
+-------------------
+Atlas Urban Shuttle
+Orion EV Fleet One
+Orion EV Fleet Two
+```
+
+Question 2:
+Which active vehicles also participated in the Fog scenario?
+
+SQL Statement:
+```sql
+SELECT make_model
+FROM Vehicles
+WHERE status = 'Active'
+
+INTERSECT
+
+SELECT v.make_model
+FROM Vehicles v
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+WHERE tr.scenario_id = 3
+ORDER BY make_model;
+```
+
+Output:
+```text
+make_model
+------------------
+Orion EV Fleet One
+Orion EV Fleet Two
+```
+
+Question 3:
+Which vehicles participated in the Sunny scenario but did not appear in the live runs executed on 2026-03-21?
+
+SQL Statement:
+```sql
+SELECT v.make_model
+FROM Vehicles v
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+WHERE tr.scenario_id = 2
+
+EXCEPT
+
+SELECT v.make_model
+FROM Vehicles v
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+WHERE date(tr.test_date) = '2026-03-21'
+ORDER BY make_model;
+```
+
+Output:
+```text
+make_model
+-------------------
+Atlas Urban Shuttle
+Orion EV Fleet One
+```
+
+3.4 Complex queries based on Subqueries
+
+Question 1:
+Which AI model has the highest average detection confidence?
+
+SQL Statement:
+```sql
+SELECT model_name, avg_confidence
+FROM (
+    SELECT
+        m.version_name AS model_name,
+        ROUND(AVG(d.confidence_score), 3) AS avg_confidence
+    FROM AI_Models m
+    JOIN Vehicles v ON v.ai_model_id = m.model_id
+    JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+    JOIN Frames f ON f.run_id = tr.run_id
+    JOIN Detections d ON d.frame_id = f.frame_id
+    GROUP BY m.model_id, m.version_name
+)
+WHERE avg_confidence = (
+    SELECT MAX(avg_confidence)
+    FROM (
+        SELECT ROUND(AVG(d2.confidence_score), 3) AS avg_confidence
+        FROM AI_Models m2
+        JOIN Vehicles v2 ON v2.ai_model_id = m2.model_id
+        JOIN Test_Runs tr2 ON tr2.vehicle_id = v2.vehicle_id
+        JOIN Frames f2 ON f2.run_id = tr2.run_id
+        JOIN Detections d2 ON d2.frame_id = f2.frame_id
+        GROUP BY m2.model_id
+    )
+);
+```
+
+Output:
+```text
+model_name       | avg_confidence
+-----------------+---------------
+Sentinel AV v2.1 | 0.791
+```
+
+Question 2:
+Which are the top five test runs whose average speed is higher than the overall average speed of all runs?
+
+SQL Statement:
+```sql
+SELECT run_id, vehicle_id, scenario_id, avg_speed
+FROM Test_Runs
+WHERE avg_speed > (
+    SELECT ROUND(AVG(avg_speed), 2)
+    FROM Test_Runs
+)
+ORDER BY avg_speed DESC
+LIMIT 5;
+```
+
+Output:
+```text
+run_id | vehicle_id | scenario_id | avg_speed
+-------+------------+-------------+----------
+14     | 2          | 2           | 76.39
+2      | 2          | 1           | 70.70
+5      | 2          | 2           | 69.77
+12     | 3          | 1           | 66.57
+13     | 1          | 2           | 66.32
+```
+
+Question 3:
+What is the latest test run completed by each vehicle?
+
+SQL Statement:
+```sql
+SELECT
+    v.make_model,
+    tr.run_id,
+    tr.test_date
+FROM Vehicles v
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+WHERE tr.test_date = (
+    SELECT MAX(tr2.test_date)
+    FROM Test_Runs tr2
+    WHERE tr2.vehicle_id = v.vehicle_id
+)
+ORDER BY v.vehicle_id;
+```
+
+Output:
+```text
+make_model          | run_id | test_date
+--------------------+--------+--------------------
+Orion EV Fleet One  | 16     | 2026-02-16T10:00:00
+Orion EV Fleet Two  | 20     | 2026-03-21T15:01:59
+Atlas Urban Shuttle | 18     | 2026-02-16T12:00:00
+```
+
+3.5 Complex queries based on Joins
+
+Question 1:
+Show a joined report of test runs with vehicle, model, and scenario information.
+
+SQL Statement:
+```sql
+SELECT
+    tr.run_id,
+    v.make_model,
+    m.version_name,
+    s.weather_type,
+    s.light_level,
+    s.road_type,
+    tr.test_date,
+    tr.avg_speed
+FROM Test_Runs tr
+JOIN Vehicles v ON v.vehicle_id = tr.vehicle_id
+JOIN AI_Models m ON m.model_id = v.ai_model_id
+JOIN Scenarios s ON s.scenario_id = tr.scenario_id
+ORDER BY tr.run_id
+LIMIT 8;
+```
+
+Output:
+```text
+run_id | make_model          | version_name     | weather_type | light_level | road_type | test_date           | avg_speed
+-------+---------------------+------------------+--------------+-------------+-----------+---------------------+----------
+1      | Orion EV Fleet One  | DriveNet v1.0    | Rain         | Night       | Highway   | 2026-02-11T10:00:00 | 63.79
+2      | Orion EV Fleet Two  | DriveNet v1.4    | Rain         | Night       | Highway   | 2026-02-11T11:00:00 | 70.70
+3      | Atlas Urban Shuttle | Sentinel AV v2.1 | Rain         | Night       | Highway   | 2026-02-11T12:00:00 | 61.19
+4      | Orion EV Fleet One  | DriveNet v1.0    | Sunny        | Day         | Highway   | 2026-02-12T10:00:00 | 59.71
+5      | Orion EV Fleet Two  | DriveNet v1.4    | Sunny        | Day         | Highway   | 2026-02-12T11:00:00 | 69.77
+6      | Atlas Urban Shuttle | Sentinel AV v2.1 | Sunny        | Day         | Highway   | 2026-02-12T12:00:00 | 59.97
+7      | Orion EV Fleet One  | DriveNet v1.0    | Fog          | Day         | Urban     | 2026-02-13T10:00:00 | 18.00
+8      | Orion EV Fleet Two  | DriveNet v1.4    | Fog          | Day         | Urban     | 2026-02-13T11:00:00 | 28.93
+```
+
+Question 2:
+Show the lowest-confidence detections from live run `20`.
+
+SQL Statement:
+```sql
+SELECT
+    f.frame_id,
+    f.timestamp,
+    d.object_type,
+    d.confidence_score,
+    tr.run_id,
+    v.make_model
+FROM Frames f
+JOIN Detections d ON d.frame_id = f.frame_id
+JOIN Test_Runs tr ON tr.run_id = f.run_id
+JOIN Vehicles v ON v.vehicle_id = tr.vehicle_id
+WHERE tr.run_id = 20
+  AND d.confidence_score < 0.65
+ORDER BY d.confidence_score ASC
+LIMIT 8;
+```
+
+Output:
+```text
+frame_id | timestamp           | object_type | confidence_score | run_id | make_model
+---------+---------------------+-------------+------------------+--------+-------------------
+197      | 2026-03-21T15:02:11 | Pedestrian  | 0.364            | 20     | Orion EV Fleet Two
+197      | 2026-03-21T15:02:11 | Barrier     | 0.380            | 20     | Orion EV Fleet Two
+195      | 2026-03-21T15:02:07 | Pedestrian  | 0.527            | 20     | Orion EV Fleet Two
+199      | 2026-03-21T15:02:15 | Truck       | 0.558            | 20     | Orion EV Fleet Two
+193      | 2026-03-21T15:02:03 | Pedestrian  | 0.582            | 20     | Orion EV Fleet Two
+193      | 2026-03-21T15:02:03 | Signal Cone | 0.584            | 20     | Orion EV Fleet Two
+191      | 2026-03-21T15:01:59 | Car         | 0.587            | 20     | Orion EV Fleet Two
+191      | 2026-03-21T15:01:59 | Signal Cone | 0.594            | 20     | Orion EV Fleet Two
+```
+
+Question 3:
+What is the average confidence of each AI model in each scenario?
+
+SQL Statement:
+```sql
+SELECT
+    m.version_name,
+    s.weather_type || ' ' || s.light_level AS scenario_name,
+    ROUND(AVG(d.confidence_score), 3) AS avg_confidence
+FROM AI_Models m
+JOIN Vehicles v ON v.ai_model_id = m.model_id
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+JOIN Scenarios s ON s.scenario_id = tr.scenario_id
+JOIN Frames f ON f.run_id = tr.run_id
+JOIN Detections d ON d.frame_id = f.frame_id
+GROUP BY m.version_name, scenario_name
+ORDER BY m.version_name, scenario_name;
+```
+
+Output:
+```text
+version_name     | scenario_name | avg_confidence
+-----------------+---------------+---------------
+DriveNet v1.0    | Fog Day       | 0.519
+DriveNet v1.0    | Rain Night    | 0.608
+DriveNet v1.0    | Sunny Day     | 0.881
+DriveNet v1.4    | Fog Day       | 0.598
+DriveNet v1.4    | Rain Night    | 0.669
+DriveNet v1.4    | Sunny Day     | 0.944
+Sentinel AV v2.1 | Fog Day       | 0.656
+Sentinel AV v2.1 | Rain Night    | 0.743
+Sentinel AV v2.1 | Sunny Day     | 0.973
+```
+
+3.6 Complex queries based on views
+
+Question 1:
+Create a view that summarizes average confidence and detection count by model and scenario.
+
+SQL Statement:
+```sql
+CREATE VIEW IF NOT EXISTS vw_model_scenario_summary AS
+SELECT
+    m.version_name,
+    s.weather_type || ' ' || s.light_level AS scenario_name,
+    ROUND(AVG(d.confidence_score), 3) AS avg_confidence,
+    COUNT(d.detection_id) AS detection_count
+FROM AI_Models m
+JOIN Vehicles v ON v.ai_model_id = m.model_id
+JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+JOIN Scenarios s ON s.scenario_id = tr.scenario_id
+JOIN Frames f ON f.run_id = tr.run_id
+JOIN Detections d ON d.frame_id = f.frame_id
+GROUP BY m.version_name, scenario_name;
+
+SELECT *
+FROM vw_model_scenario_summary
+ORDER BY avg_confidence DESC
+LIMIT 5;
+```
+
+Output:
+```text
+version_name     | scenario_name | avg_confidence | detection_count
+-----------------+---------------+----------------+----------------
+Sentinel AV v2.1 | Sunny Day     | 0.973          | 30
+DriveNet v1.4    | Sunny Day     | 0.944          | 30
+DriveNet v1.0    | Sunny Day     | 0.881          | 30
+Sentinel AV v2.1 | Rain Night    | 0.743          | 30
+DriveNet v1.4    | Rain Night    | 0.669          | 50
+```
+
+Question 2:
+Create a view to show the latest test date for each vehicle.
+
+SQL Statement:
+```sql
+CREATE VIEW IF NOT EXISTS vw_vehicle_latest_run AS
+SELECT
+    v.vehicle_id,
+    v.make_model,
+    MAX(tr.test_date) AS latest_test_date
+FROM Vehicles v
+LEFT JOIN Test_Runs tr ON tr.vehicle_id = v.vehicle_id
+GROUP BY v.vehicle_id, v.make_model;
+
+SELECT *
+FROM vw_vehicle_latest_run
+ORDER BY vehicle_id;
+```
+
+Output:
+```text
+vehicle_id | make_model          | latest_test_date
+-----------+---------------------+--------------------
+1          | Orion EV Fleet One  | 2026-02-16T10:00:00
+2          | Orion EV Fleet Two  | 2026-03-21T15:01:59
+3          | Atlas Urban Shuttle | 2026-02-16T12:00:00
+```
+
+Question 3:
+Create a view to list rain and fog frames where the minimum detection confidence is below `0.60`.
+
+SQL Statement:
+```sql
+CREATE VIEW IF NOT EXISTS vw_low_confidence_frames AS
+SELECT
+    f.frame_id,
+    tr.run_id,
+    v.make_model,
+    s.weather_type,
+    ROUND(MIN(d.confidence_score), 3) AS lowest_confidence
+FROM Frames f
+JOIN Test_Runs tr ON tr.run_id = f.run_id
+JOIN Vehicles v ON v.vehicle_id = tr.vehicle_id
+JOIN Scenarios s ON s.scenario_id = tr.scenario_id
+JOIN Detections d ON d.frame_id = f.frame_id
+WHERE s.weather_type IN ('Rain', 'Fog')
+GROUP BY f.frame_id, tr.run_id, v.make_model, s.weather_type
+HAVING MIN(d.confidence_score) < 0.60;
+
+SELECT *
+FROM vw_low_confidence_frames
+ORDER BY lowest_confidence ASC
+LIMIT 8;
+```
+
+Output:
+```text
+frame_id | run_id | make_model          | weather_type | lowest_confidence
+---------+--------+---------------------+--------------+------------------
+197      | 20     | Orion EV Fleet Two  | Fog          | 0.364
+1        | 1      | Orion EV Fleet One  | Rain         | 0.420
+3        | 1      | Orion EV Fleet One  | Rain         | 0.420
+8        | 1      | Orion EV Fleet One  | Rain         | 0.420
+63       | 7      | Orion EV Fleet One  | Fog          | 0.420
+71       | 8      | Orion EV Fleet Two  | Fog          | 0.420
+151      | 16     | Orion EV Fleet One  | Fog          | 0.420
+177      | 18     | Atlas Urban Shuttle | Fog          | 0.420
+```
+
+3.7 Complex queries based on Triggers
+
+Note:
+These trigger examples are written for the current DriveLearn schema. For demonstration, they use temporary log tables and are intended to be executed inside a transaction so the base project data remains unchanged after testing.
+
+Question 1:
+How can a trigger log every new test run inserted into `Test_Runs`?
+
+SQL Statement:
+```sql
+CREATE TEMP TABLE run_insert_log (
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    vehicle_id INTEGER,
+    scenario_id INTEGER,
+    avg_speed REAL
+);
+
+CREATE TEMP TRIGGER trg_log_run_insert
+AFTER INSERT ON Test_Runs
+BEGIN
+    INSERT INTO run_insert_log (run_id, vehicle_id, scenario_id, avg_speed)
+    VALUES (NEW.run_id, NEW.vehicle_id, NEW.scenario_id, NEW.avg_speed);
+END;
+
+INSERT INTO Test_Runs (vehicle_id, scenario_id, test_date, avg_speed)
+VALUES (1, 2, '2026-03-23T10:00:00', 64.50);
+
+SELECT run_id, vehicle_id, scenario_id, avg_speed
+FROM run_insert_log;
+```
+
+Output:
+```text
+run_id | vehicle_id | scenario_id | avg_speed
+-------+------------+-------------+----------
+21     | 1          | 2           | 64.5
+```
+
+Question 2:
+How can a trigger record a vehicle status update?
+
+SQL Statement:
+```sql
+CREATE TEMP TABLE vehicle_status_log (
+    vehicle_id INTEGER,
+    old_status TEXT,
+    new_status TEXT
+);
+
+CREATE TEMP TRIGGER trg_log_vehicle_status
+AFTER UPDATE OF status ON Vehicles
+BEGIN
+    INSERT INTO vehicle_status_log (vehicle_id, old_status, new_status)
+    VALUES (OLD.vehicle_id, OLD.status, NEW.status);
+END;
+
+UPDATE Vehicles
+SET status = 'Maintenance'
+WHERE vehicle_id = 3;
+
+SELECT vehicle_id, old_status, new_status
+FROM vehicle_status_log;
+```
+
+Output:
+```text
+vehicle_id | old_status | new_status
+-----------+------------+-----------
+3          | Standby    | Maintenance
+```
+
+Question 3:
+How can a trigger log frame details before a frame is deleted?
+
+SQL Statement:
+```sql
+CREATE TEMP TABLE frame_delete_log (
+    frame_id INTEGER,
+    run_id INTEGER,
+    image_path TEXT
+);
+
+CREATE TEMP TRIGGER trg_log_frame_delete
+BEFORE DELETE ON Frames
+BEGIN
+    INSERT INTO frame_delete_log (frame_id, run_id, image_path)
+    VALUES (OLD.frame_id, OLD.run_id, OLD.image_path);
+END;
+
+DELETE FROM Frames
+WHERE frame_id = 200;
+
+SELECT frame_id, run_id, image_path
+FROM frame_delete_log;
+```
+
+Output:
+```text
+frame_id | run_id | image_path
+---------+--------+-------------------------
+200      | 20     | live/run_20/frame_10.jpg
+```
+
+3.8 Complex queries based on Cursors
+
+Note:
+SQLite does not support stored-procedure style SQL cursors like Oracle or MySQL. In the current DriveLearn project, cursor processing is done in Python through `sqlite3.Cursor` in files such as `app.py` and `query_db.py`. The following examples therefore use the SQL executed by the cursor and the rows returned by that cursor.
+
+Question 1:
+Using a cursor, how can we fetch all active vehicles along with their assigned AI model?
+
+SQL Statement:
+```sql
+SELECT
+    v.vehicle_id,
+    v.make_model,
+    m.version_name
+FROM Vehicles v
+JOIN AI_Models m ON m.model_id = v.ai_model_id
+WHERE v.status = 'Active'
+ORDER BY v.vehicle_id;
+```
+
+Output:
+```text
+vehicle_id | make_model          | version_name
+-----------+---------------------+------------------
+1          | Orion EV Fleet One  | DriveNet v1.0
+2          | Orion EV Fleet Two  | DriveNet v1.4
+```
+
+Question 2:
+Using a cursor, how can we read the five lowest-confidence detections from the latest fog live run (`run_id = 20`) one row at a time?
+
+SQL Statement:
+```sql
+SELECT
+    f.frame_id,
+    d.object_type,
+    d.confidence_score
+FROM Frames f
+JOIN Detections d ON d.frame_id = f.frame_id
+WHERE f.run_id = 20
+ORDER BY d.confidence_score ASC
+LIMIT 5;
+```
+
+Output:
+```text
+frame_id | object_type | confidence_score
+---------+-------------+-----------------
+197      | Pedestrian  | 0.364
+197      | Barrier     | 0.380
+195      | Pedestrian  | 0.527
+199      | Truck       | 0.558
+193      | Pedestrian  | 0.582
+```
+
+Question 3:
+Using a cursor, how can we iterate through scenario statistics for reporting?
+
+SQL Statement:
+```sql
+SELECT
+    s.scenario_id,
+    s.weather_type,
+    COUNT(tr.run_id) AS total_runs,
+    ROUND(AVG(tr.avg_speed), 2) AS avg_speed
+FROM Scenarios s
+LEFT JOIN Test_Runs tr ON tr.scenario_id = s.scenario_id
+GROUP BY s.scenario_id, s.weather_type
+ORDER BY s.scenario_id;
+```
+
+Output:
+```text
+scenario_id | weather_type | total_runs | avg_speed
+------------+--------------+------------+----------
+1           | Rain         | 7          | 62.55
+2           | Sunny        | 6          | 65.16
+3           | Fog          | 7          | 19.99
+```
